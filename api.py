@@ -6,8 +6,8 @@ import shutil
 
 app = FastAPI(title="Fast Clipboard API")
 
-# Ensure content directory exists
-CONTENT_DIR = "content"
+# Use /tmp directory which is writable in most serverless environments
+CONTENT_DIR = "/tmp/content"
 os.makedirs(CONTENT_DIR, exist_ok=True)
 
 # Default content file path
