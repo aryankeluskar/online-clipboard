@@ -1,59 +1,123 @@
 import os
-from typing import Dict, Union
-from fastapi import FastAPI, HTTPException, Body
+import hashlib
+import time
+from typing import Dict, Union, Optional
+from fastapi import FastAPI, HTTPException, Body, Request
 from fastapi.responses import JSONResponse
-import shutil
+import redis
+import json
+
+import dotenv
+dotenv.load_dotenv()
 
 app = FastAPI(title="Fast Clipboard API")
 
-# Use /tmp directory which is writable in most serverless environments
-CONTENT_DIR = "/tmp/content"
-os.makedirs(CONTENT_DIR, exist_ok=True)
+# Redis connection with Redis Cloud credentials
+redis_client = redis.Redis(
+    host='redis-15819.c60.us-west-1-2.ec2.redns.redis-cloud.com',
+    port=15819,
+    decode_responses=True,
+    username="default",
+    password="xkKDKZmZ7Pol1fTiNBt6La2W4hRRoL71",
+)
 
-# Default content file path
-CONTENT_FILE = os.path.join(CONTENT_DIR, "clipboard.txt")
+# Maximum content size (10MB in bytes)
+MAX_CONTENT_SIZE = 10 * 1024 * 1024  # 10MB
+
+# Expiration time in seconds (24 hours)
+EXPIRY_TIME = 24 * 60 * 60  # 24 hours
 
 
 @app.get("/")
-async def get_content():
+async def root():
     """
-    Retrieve all content from the clipboard
+    Root endpoint with API information
+    """
+    return {
+        "message": "Fast Clipboard API", 
+        "info": "Use POST / to create a clipboard and GET /{id} to retrieve it"
+    }
+
+
+@app.get("/{clipboard_id}")
+async def get_content(clipboard_id: str):
+    """
+    Retrieve content from the clipboard by ID
     """
     try:
-        # Check if the content file exists
-        if not os.path.exists(CONTENT_FILE):
-            # Return empty content if file doesn't exist
-            return {"content": ""}
+        # Check if the clipboard exists in Redis
+        content = redis_client.get(f"clipboard:{clipboard_id}")
         
-        # Read content from the file
-        with open(CONTENT_FILE, "r") as f:
-            content = f.read()
+        if not content:
+            raise HTTPException(status_code=404, detail="Clipboard not found or has expired")
         
         return {"content": content}
+    except redis.RedisError as e:
+        print(f"Redis error retrieving content: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error retrieving content: {str(e)}")
     except Exception as e:
         print(f"Error retrieving content: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error retrieving content: {str(e)}")
 
 
 @app.post("/")
-async def update_content(content: str = Body(..., embed=True)):
+async def update_content(request: Request):
     """
-    Update all content in the clipboard
+    Create a new clipboard and return a hash ID with 24-hour expiry
     """
     try:
-        # Ensure the content directory exists
-        os.makedirs(CONTENT_DIR, exist_ok=True)
+        # Get raw content from request
+        content = await request.body()
         
-        # Write content to the file
-        with open(CONTENT_FILE, "w") as f:
-            f.write(content)
+        # Convert bytes to string if needed
+        if isinstance(content, bytes):
+            try:
+                content = content.decode('utf-8')
+            except UnicodeDecodeError:
+                # If it's binary data, keep as is
+                pass
         
-        return {"message": "Content updated successfully"}
+        # Check content size
+        content_size = len(content.encode('utf-8') if isinstance(content, str) else content)
+        if content_size > MAX_CONTENT_SIZE:
+            raise HTTPException(
+                status_code=413, 
+                detail=f"Content too large. Maximum size is {MAX_CONTENT_SIZE/1024/1024}MB"
+            )
+        
+        # Generate a hash ID based on content and timestamp
+        timestamp = str(time.time())
+        hash_input = f"{content}{timestamp}".encode('utf-8') if isinstance(content, str) else content + timestamp.encode('utf-8')
+        clipboard_id = hashlib.sha256(hash_input).hexdigest()[:16]
+        
+        # Store content in Redis with expiration
+        redis_client.setex(f"clipboard:{clipboard_id}", EXPIRY_TIME, content)
+        
+        return {
+            "message": "Content updated successfully",
+            "clipboard_id": clipboard_id,
+            "expires_in": f"{EXPIRY_TIME/60/60} hours"
+        }
+    except redis.RedisError as e:
+        print(f"Redis error updating content: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error updating content: {str(e)}")
     except Exception as e:
         print(f"Error updating content: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error updating content: {str(e)}")
 
 
+@app.on_event("startup")
+async def startup_event():
+    """
+    Ensure Redis connection is working on startup
+    """
+    try:
+        redis_client.ping()
+        print("Successfully connected to Redis")
+    except redis.RedisError as e:
+        print(f"Redis connection error: {str(e)}")
+
+
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True) 
+    uvicorn.run("api:app", host="0.0.0.0", port=8000, reload=True) 
