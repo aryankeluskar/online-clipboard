@@ -7,18 +7,18 @@ from fastapi.responses import JSONResponse
 import redis
 import json
 
-import dotenv
-dotenv.load_dotenv()
+from dotenv import load_dotenv
+load_dotenv()
 
 app = FastAPI(title="Fast Clipboard API")
 
 # Redis connection with Redis Cloud credentials
 redis_client = redis.Redis(
-    host='redis-15819.c60.us-west-1-2.ec2.redns.redis-cloud.com',
-    port=15819,
+    host=os.getenv("REDIS_HOST"),
+    port=os.getenv("REDIS_PORT"),
     decode_responses=True,
-    username="default",
-    password="xkKDKZmZ7Pol1fTiNBt6La2W4hRRoL71",
+    username=os.getenv("REDIS_USERNAME"),
+    password=os.getenv("REDIS_PASSWORD"),
 )
 
 # Maximum content size (10MB in bytes)

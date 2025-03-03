@@ -47,11 +47,11 @@ A high-performance FastAPI application that functions as an online clipboard wit
 The application is configured to use Redis Cloud by default with the following connection details:
 ```python
 redis_client = redis.Redis(
-    host='redis-15819.c60.us-west-1-2.ec2.redns.redis-cloud.com',
-    port=15819,
+    host='<redis-host-url>',
+    port=<redis-port>,
     decode_responses=True,
-    username="default",
-    password="xkKDKZmZ7Pol1fTiNBt6La2W4hRRoL71",
+    username="<redis-username>",
+    password="<redis-password>",
 )
 ```
 
@@ -62,13 +62,13 @@ No additional configuration is needed for deployment.
 ### Get clipboard content
 
 ```bash
-curl https://online-clipboard-two.vercel.app/{clipboard_id}
+curl https://clipboard.aryankeluskar.com/{clipboard_id}
 ```
 
 ### Create a new clipboard
 
 ```bash
-curl -X POST https://online-clipboard-two.vercel.app/ -d "Your clipboard content here"
+curl -X POST https://clipboard.aryankeluskar.com/ -d "Your clipboard content here"
 ```
 
 Response:
@@ -84,8 +84,8 @@ Response:
 
 When the server is running, you can access the automatic interactive API documentation at:
 
-- Swagger UI: https://online-clipboard-two.vercel.app/docs
-- ReDoc: https://online-clipboard-two.vercel.app/redoc
+- Swagger UI: https://clipboard.aryankeluskar.com/docs
+- ReDoc: https://clipboard.aryankeluskar.com/redoc
 
 ## Technical Details
 
